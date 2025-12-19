@@ -14,6 +14,7 @@ import {IProxyCreationCallback} from "safe-smart-account/contracts/proxies/IProx
  *         When known beneficiaries deploy and register their wallets, the registry awards tokens to the wallet.
  * @dev The registry has embedded verifications to ensure only legitimate Safe wallets are stored.
  */
+
 contract WalletRegistry is IProxyCreationCallback, Ownable {
     uint256 private constant EXPECTED_OWNERS_COUNT = 1;
     uint256 private constant EXPECTED_THRESHOLD = 1;
@@ -64,7 +65,14 @@ contract WalletRegistry is IProxyCreationCallback, Ownable {
      * @notice Function executed when user creates a Safe wallet via SafeProxyFactory::createProxyWithCallback
      *          setting the registry's address as the callback.
      */
-    function proxyCreated(SafeProxy proxy, address singleton, bytes calldata initializer, uint256) external override {
+    function proxyCreated(
+        SafeProxy proxy,
+        address singleton,
+        bytes calldata initializer,
+        uint256
+    ) external override {
+        //@note if initialize::to != 0 revert
+
         if (token.balanceOf(address(this)) < PAYMENT_AMOUNT) {
             // fail early
             revert NotEnoughFunds();
@@ -118,12 +126,23 @@ contract WalletRegistry is IProxyCreationCallback, Ownable {
         wallets[walletOwner] = walletAddress;
 
         // Pay tokens to the newly created wallet
-        SafeTransferLib.safeTransfer(address(token), walletAddress, PAYMENT_AMOUNT);
+        SafeTransferLib.safeTransfer(
+            address(token),
+            walletAddress,
+            PAYMENT_AMOUNT
+        );
     }
 
-    function _getFallbackManager(address payable wallet) private view returns (address) {
-        return abi.decode(
-            Safe(wallet).getStorageAt(uint256(keccak256("fallback_manager.handler.address")), 0x20), (address)
-        );
+    function _getFallbackManager(
+        address payable wallet
+    ) private view returns (address) {
+        return
+            abi.decode(
+                Safe(wallet).getStorageAt(
+                    uint256(keccak256("fallback_manager.handler.address")),
+                    0x20
+                ),
+                (address)
+            );
     }
 }
