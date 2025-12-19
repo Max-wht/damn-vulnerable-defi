@@ -56,6 +56,9 @@ abstract contract AuthorizedExecutor is ReentrancyGuard {
             selector := calldataload(calldataOffset)
         }
 
+        //@note right way
+        // selector = bytes4(actionData[0:4]);
+
         if (!permissions[getActionId(selector, msg.sender, target)]) {
             revert NotAllowed();
         }

