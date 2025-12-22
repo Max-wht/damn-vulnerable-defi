@@ -5,15 +5,7 @@ pragma solidity =0.8.25;
 import {Address} from "@openzeppelin/contracts/utils/Address.sol";
 import {ClimberTimelockBase} from "./ClimberTimelockBase.sol";
 import {ADMIN_ROLE, PROPOSER_ROLE, MAX_TARGETS, MIN_TARGETS, MAX_DELAY} from "./ClimberConstants.sol";
-import {
-    InvalidTargetsCount,
-    InvalidDataElementsCount,
-    InvalidValuesCount,
-    OperationAlreadyKnown,
-    NotReadyForExecution,
-    CallerNotTimelock,
-    NewDelayAboveMax
-} from "./ClimberErrors.sol";
+import {InvalidTargetsCount, InvalidDataElementsCount, InvalidValuesCount, OperationAlreadyKnown, NotReadyForExecution, CallerNotTimelock, NewDelayAboveMax} from "./ClimberErrors.sol";
 
 /**
  * @title ClimberTimelock
@@ -38,6 +30,7 @@ contract ClimberTimelock is ClimberTimelockBase {
         delay = 1 hours;
     }
 
+    //@audit-nespect
     function schedule(
         address[] calldata targets,
         uint256[] calldata values,
@@ -69,10 +62,12 @@ contract ClimberTimelock is ClimberTimelockBase {
     /**
      * Anyone can execute what's been scheduled via `schedule`
      */
-    function execute(address[] calldata targets, uint256[] calldata values, bytes[] calldata dataElements, bytes32 salt)
-        external
-        payable
-    {
+    function execute(
+        address[] calldata targets,
+        uint256[] calldata values,
+        bytes[] calldata dataElements,
+        bytes32 salt
+    ) external payable {
         if (targets.length <= MIN_TARGETS) {
             revert InvalidTargetsCount();
         }
@@ -87,10 +82,10 @@ contract ClimberTimelock is ClimberTimelockBase {
 
         bytes32 id = getOperationId(targets, values, dataElements, salt);
 
+        //@audit-high reentrancy
         for (uint8 i = 0; i < targets.length; ++i) {
             targets[i].functionCallWithValue(dataElements[i], values[i]);
         }
-
         if (getOperationState(id) != OperationState.ReadyForExecution) {
             revert NotReadyForExecution(id);
         }
