@@ -13,6 +13,7 @@ contract Exchange is ReentrancyGuard {
     DamnValuableNFT public immutable token;
     TrustfulOracle public immutable oracle;
 
+    //@audit-info better to use Exchange__InvalidPayment()
     error InvalidPayment();
     error SellerNotOwner(uint256 id);
     error TransferNotApproved();
@@ -23,6 +24,7 @@ contract Exchange is ReentrancyGuard {
 
     constructor(address _oracle) payable {
         token = new DamnValuableNFT();
+        //@note _transferOwnership(address(0)) is the same as renounceOwnership()
         token.renounceOwnership();
         oracle = TrustfulOracle(_oracle);
     }
@@ -33,6 +35,7 @@ contract Exchange is ReentrancyGuard {
         }
 
         // Price should be in [wei / NFT]
+        //@note use oracle to get price in wei
         uint256 price = oracle.getMedianPrice(token.symbol());
         if (msg.value < price) {
             revert InvalidPayment();
