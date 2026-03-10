@@ -25,13 +25,17 @@ contract CurvyPuppetOracle is Ownable {
         Price memory price = prices[asset];
 
         if (price.value == 0) revert UnsupportedAsset();
+        // so the price is only available before expiration
         if (block.timestamp > price.expiration) revert StalePrice();
 
         return price;
     }
 
+    // who create this ORACLE can change the price []
     function setPrice(address asset, uint256 value, uint256 expiration) external onlyOwner {
         if (value == 0) revert InvalidPrice();
+
+        //@audit: the price would never be resetted if timestamp >= last expiration
         if (expiration <= block.timestamp || expiration > block.timestamp + 2 days) revert InvalidExpiration();
         prices[asset] = Price(value, expiration);
     }

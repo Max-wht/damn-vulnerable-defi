@@ -66,10 +66,7 @@ contract CurvyPuppetChallenge is Test {
 
         // Deploy the lending contract. It will offer LP tokens, accepting DVT as collateral.
         lending = new CurvyPuppetLending({
-            _collateralAsset: address(dvt),
-            _curvePool: curvePool,
-            _permit2: permit2,
-            _oracle: oracle
+            _collateralAsset: address(dvt), _curvePool: curvePool, _permit2: permit2, _oracle: oracle
         });
 
         // Fund treasury account with WETH and approve player's expenses
@@ -158,7 +155,7 @@ contract CurvyPuppetChallenge is Test {
      * CODE YOUR SOLUTION HERE
      */
     function test_curvyPuppet() public checkSolvedByPlayer {
-        
+
     }
 
     /**
