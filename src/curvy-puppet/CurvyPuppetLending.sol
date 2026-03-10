@@ -33,6 +33,7 @@ contract CurvyPuppetLending is ReentrancyGuard {
     error UnhealthyPosition();
 
     constructor(address _collateralAsset, IStableSwap _curvePool, IPermit2 _permit2, CurvyPuppetOracle _oracle) {
+        // use curve as money market
         borrowAsset = _curvePool.lp_token();
         collateralAsset = _collateralAsset;
         curvePool = _curvePool;
@@ -48,7 +49,10 @@ contract CurvyPuppetLending is ReentrancyGuard {
     function withdraw(uint256 amount) external nonReentrant {
         if (amount == 0) revert InvalidAmount();
 
+        //. what will happens if amount is greater than collateralAmount
+        //. it will revert
         uint256 remainingCollateral = positions[msg.sender].collateralAmount - amount;
+
         uint256 remainingCollateralValue = getCollateralValue(remainingCollateral);
         uint256 borrowValue = getBorrowValue(positions[msg.sender].borrowAmount);
 
@@ -110,6 +114,7 @@ contract CurvyPuppetLending is ReentrancyGuard {
 
     function getBorrowValue(uint256 amount) public view returns (uint256) {
         if (amount == 0) return 0;
+        // ETH amount * LP Price
         return amount.mulWadUp(_getLPTokenPrice());
     }
 
@@ -131,6 +136,7 @@ contract CurvyPuppetLending is ReentrancyGuard {
     }
 
     function _getLPTokenPrice() private view returns (uint256) {
+        //ETH * price in curve
         return oracle.getPrice(curvePool.coins(0)).value.mulWadDown(curvePool.get_virtual_price());
     }
 }
