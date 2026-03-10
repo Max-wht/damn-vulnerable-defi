@@ -72,6 +72,8 @@ contract FreeRiderNFTMarketplace is ReentrancyGuard {
 
         offers[tokenId] = price;
 
+        //slot#2 is offersCount
+        //offersCount++
         assembly {
             // gas savings
             sstore(0x02, add(sload(0x02), 0x01))
@@ -102,9 +104,11 @@ contract FreeRiderNFTMarketplace is ReentrancyGuard {
 
         // transfer from seller to buyer
         DamnValuableNFT _token = token; // cache for gas savings
+        // A[NFT] -> B
         _token.safeTransferFrom(_token.ownerOf(tokenId), msg.sender, tokenId);
 
         // pay seller using cached token
+        // the ownerOf token has changed
         payable(_token.ownerOf(tokenId)).sendValue(priceToPay);
 
         emit NFTBought(msg.sender, tokenId, priceToPay);
