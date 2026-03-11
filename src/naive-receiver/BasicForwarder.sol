@@ -46,6 +46,7 @@ contract BasicForwarder is EIP712 {
         if (block.timestamp > request.deadline) revert OldRequest();
         if (nonces[request.from] != request.nonce) revert InvalidNonce();
 
+        // NaiveReceiverPool.sol
         if (IHasTrustedForwarder(request.target).trustedForwarder() != address(this)) revert InvalidTarget();
 
         address signer = ECDSA.recover(_hashTypedData(getDataHash(request)), signature);
@@ -55,11 +56,18 @@ contract BasicForwarder is EIP712 {
     function execute(Request calldata request, bytes calldata signature) public payable returns (bool success) {
         _checkRequest(request, signature);
 
+        //@audit dose the request.from inspected?
+        //so Alice can sign a signature and call the excute 
+        //with request.from = bob and request.data.receiver = alice in withdraw() function
+        //while bob deposit some weth in the pool
+
         nonces[request.from]++;
 
         uint256 gasLeft;
         uint256 value = request.value; // in wei
         address target = request.target;
+        //? why use the packed? EIP712 required abi.encode() instead of abi.encodePacked()
+        //? what is the call function?
         bytes memory payload = abi.encodePacked(request.data, request.from);
         uint256 forwardGas = request.gas;
         assembly {

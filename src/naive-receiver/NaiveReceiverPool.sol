@@ -44,9 +44,12 @@ contract NaiveReceiverPool is Multicall, IERC3156FlashLender {
         external
         returns (bool)
     {
+    
+        //@audit: everyone can force a reciver to call the flashloan
         if (token != address(weth)) revert UnsupportedCurrency();
 
         // Transfer WETH and handle control to receiver
+        //? if receiver has malicious Receive().
         weth.transfer(address(receiver), amount);
         totalDeposits -= amount;
 
@@ -83,6 +86,7 @@ contract NaiveReceiverPool is Multicall, IERC3156FlashLender {
         totalDeposits += amount;
     }
 
+    //@todo: check the forwarder contract and its msg.data
     function _msgSender() internal view override returns (address) {
         if (msg.sender == trustedForwarder && msg.data.length >= 20) {
             return address(bytes20(msg.data[msg.data.length - 20:]));

