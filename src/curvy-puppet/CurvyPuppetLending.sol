@@ -137,6 +137,7 @@ contract CurvyPuppetLending is ReentrancyGuard {
 
     function _getLPTokenPrice() private view returns (uint256) {
         //ETH * price in curve
+        //@note: curve matters, which allows one-side add liquidity
         return oracle.getPrice(curvePool.coins(0)).value.mulWadDown(curvePool.get_virtual_price());
     }
 }

