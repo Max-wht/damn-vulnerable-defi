@@ -53,6 +53,7 @@ contract PuppetV2Pool {
     }
 
     // Fetch the price from Uniswap v2 using the official libraries
+    //@audit: the ratio of tokenA and tokenB can be maliciously operated by uniswapV2::swap
     function _getOracleQuote(uint256 amount) private view returns (uint256) {
         (uint256 reservesWETH, uint256 reservesToken) =
             UniswapV2Library.getReserves({factory: _uniswapFactory, tokenA: address(_weth), tokenB: address(_token)});
