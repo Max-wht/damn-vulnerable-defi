@@ -3,6 +3,7 @@
 pragma solidity =0.8.25;
 
 interface ISimpleGovernance {
+    // target.call{value: value}(data)
     struct GovernanceAction {
         uint128 value;
         uint64 proposedAt;
