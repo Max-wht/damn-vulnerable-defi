@@ -68,12 +68,7 @@ contract ShardsNFTMarketplace is IShardsNFTMarketplace, IERC721Receiver, ERC1155
 
         // create and store new offer
         offers[offerCount] = Offer({
-            nftId: nftId,
-            totalShards: totalShards,
-            stock: totalShards,
-            price: price,
-            seller: msg.sender,
-            isOpen: true
+            nftId: nftId, totalShards: totalShards, stock: totalShards, price: price, seller: msg.sender, isOpen: true
         });
 
         nftToOffers[nftId] = offerCount;
@@ -93,6 +88,7 @@ contract ShardsNFTMarketplace is IShardsNFTMarketplace, IERC721Receiver, ERC1155
      * @param nftId ID of the NFT to claim
      */
     function redeem(uint256 nftId) external {
+        //@audit: anyonee can redeem?
         if (nft.ownerOf(nftId) != address(this)) revert UnknownNFT(nftId);
         uint64 offerId = nftToOffers[nftId];
         Offer memory offer = offers[offerId];
@@ -113,14 +109,17 @@ contract ShardsNFTMarketplace is IShardsNFTMarketplace, IERC721Receiver, ERC1155
      * @notice Called by buyers to partially/fully fill offers, paying in DVT.
      *         These purchases can be cancelled.
      */
+    //@note: fill the stock
     function fill(uint64 offerId, uint256 want) external returns (uint256 purchaseIndex) {
-        Offer storage offer = offers[offerId];
+        Offer storage offer = offers[offerId]; //on behalf of an NFT
         if (want == 0) revert BadAmount();
         if (offer.price == 0) revert UnknownOffer();
+        //? the stock will be never to be 0
         if (want > offer.stock) revert OutOfStock();
         if (!offer.isOpen) revert NotOpened(offerId);
 
         offer.stock -= want;
+        //Add an purchase
         purchaseIndex = purchases[offerId].length;
         uint256 _currentRate = rate;
         purchases[offerId].push(
@@ -132,6 +131,12 @@ contract ShardsNFTMarketplace is IShardsNFTMarketplace, IERC721Receiver, ERC1155
                 cancelled: false
             })
         );
+        //paymentToken is DVT, _toDVT is USDC
+        //price is USDC 
+        //USDC(1e6) * rate / 1e6 ==> the raw USDC, However DVT's decimal is 18
+        //@audit
+        //if want = 1 wei 
+        //1 wei * dvt < totalShard = 0
         paymentToken.transferFrom(
             msg.sender, address(this), want.mulDivDown(_toDVT(offer.price, _currentRate), offer.totalShards)
         );
@@ -160,6 +165,8 @@ contract ShardsNFTMarketplace is IShardsNFTMarketplace, IERC721Receiver, ERC1155
 
         emit Cancelled(offerId, purchaseIndex);
 
+        //@audit : in cancel is mulDivUp but in fill in mulDivDown
+        // shard * rate / 1e6
         paymentToken.transfer(buyer, purchase.shards.mulDivUp(purchase.rate, 1e6));
     }
 
@@ -177,6 +184,8 @@ contract ShardsNFTMarketplace is IShardsNFTMarketplace, IERC721Receiver, ERC1155
      * @param price price in USDC units
      */
     function getFee(uint256 price, uint256 _rate) public pure returns (uint256) {
+        // price * 1e6 / 100e6
+        //@audit: mismatch 2% instead of 1%
         uint256 fee = price.mulDivDown(1e6, 100e6); // 1% fee
         return _toDVT(fee, _rate);
     }
@@ -190,8 +199,8 @@ contract ShardsNFTMarketplace is IShardsNFTMarketplace, IERC721Receiver, ERC1155
     }
 
     function _chargeFees(uint256 price) private {
-        uint256 feeAmount = getFee(price, rate);
-        feesInBalance += feeAmount;
+        uint256 feeAmount = getFee(price, rate); //USDC
+        feesInBalance += feeAmount; //USDC
         emit Fee(feeAmount);
         paymentToken.transferFrom(msg.sender, address(this), feeAmount);
         assert(feesInBalance <= paymentToken.balanceOf(address(this))); // invariant
@@ -216,6 +225,7 @@ contract ShardsNFTMarketplace is IShardsNFTMarketplace, IERC721Receiver, ERC1155
     }
 
     function _toDVT(uint256 _value, uint256 _rate) private pure returns (uint256) {
+        // fee * _rate / 1e6
         return _value.mulDivDown(_rate, 1e6);
     }
 }
