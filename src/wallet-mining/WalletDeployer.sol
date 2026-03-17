@@ -45,6 +45,7 @@ contract WalletDeployer {
      * @notice Allows the caller to deploy a new Safe account and receive a payment in return.
      *         If the authorizer is set, the caller must be authorized to execute the deployment
      */
+    //@audit: user can pretend to be a legal dropper
     function drop(address aim, bytes memory wat, uint256 num) external returns (bool) {
         if (mom != address(0) && !can(msg.sender, aim)) {
             return false;
@@ -62,7 +63,7 @@ contract WalletDeployer {
 
     function can(address u, address a) public view returns (bool y) {
         assembly {
-            let m := sload(0)
+            let m := sload(0)  //mom
             if iszero(extcodesize(m)) { stop() }
             let p := mload(0x40)
             mstore(0x40, add(p, 0x44))

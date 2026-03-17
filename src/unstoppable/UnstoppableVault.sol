@@ -47,6 +47,7 @@ contract UnstoppableVault is IERC3156FlashLender, ReentrancyGuard, Owned, ERC462
             return 0;
         }
 
+        //@note: return the amount of deposited collateral
         return totalAssets();
     }
 
@@ -58,9 +59,11 @@ contract UnstoppableVault is IERC3156FlashLender, ReentrancyGuard, Owned, ERC462
             revert UnsupportedCurrency();
         }
 
+        //@note: before the end, fee == 0;
         if (block.timestamp < end && _amount < maxFlashLoan(_token)) {
             return 0;
         } else {
+            // amount * 5e16 UP
             return _amount.mulWadUp(FEE_FACTOR);
         }
     }
@@ -82,6 +85,7 @@ contract UnstoppableVault is IERC3156FlashLender, ReentrancyGuard, Owned, ERC462
         if (amount == 0) revert InvalidAmount(0); // fail early
         if (address(asset) != _token) revert UnsupportedCurrency(); // enforce ERC3156 requirement
         uint256 balanceBefore = totalAssets();
+        //@audit: this require totalSupply == totalAssets
         if (convertToShares(totalSupply) != balanceBefore) revert InvalidBalance(); // enforce ERC4626 requirement
 
         // transfer tokens out + execute callback on receiver
@@ -120,6 +124,7 @@ contract UnstoppableVault is IERC3156FlashLender, ReentrancyGuard, Owned, ERC462
         }
     }
 
+    //@audit: the owner of vault is monitor
     // Allow owner to execute arbitrary changes when paused
     function execute(address target, bytes memory data) external onlyOwner whenPaused {
         (bool success,) = target.delegatecall(data);
