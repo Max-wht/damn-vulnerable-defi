@@ -87,7 +87,7 @@ contract TheRewarderDistributor {
         for (uint256 i = 0; i < inputClaims.length; i++) {
             inputClaim = inputClaims[i];
 
-            uint256 wordPosition = inputClaim.batchNumber / 256;
+            uint256 wordPosition = inputClaim.batchNumber / 256; // 1 word can hold 255 batches
             uint256 bitPosition = inputClaim.batchNumber % 256;
 
             if (token != inputTokens[inputClaim.tokenIndex]) {
@@ -99,6 +99,7 @@ contract TheRewarderDistributor {
                 bitsSet = 1 << bitPosition; // set bit at given position
                 amount = inputClaim.amount;
             } else {
+                //@audit: should check whether the bitposition has been used
                 bitsSet = bitsSet | 1 << bitPosition;
                 amount += inputClaim.amount;
             }
@@ -113,6 +114,8 @@ contract TheRewarderDistributor {
 
             if (!MerkleProof.verify(inputClaim.proof, root, leaf)) revert InvalidProof();
 
+            //?: can anybody use other's validated claim to get the benefit?
+            //. no. because `leaf` is created by msg.sender
             inputTokens[inputClaim.tokenIndex].transfer(msg.sender, inputClaim.amount);
         }
     }
