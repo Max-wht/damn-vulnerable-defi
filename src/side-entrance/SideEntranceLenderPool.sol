@@ -32,6 +32,7 @@ contract SideEntranceLenderPool {
         SafeTransferLib.safeTransferETH(msg.sender, amount);
     }
 
+    //@audit: attacker can flashLoan all the ETH and deposit them with some fee, the invariant is still correct
     function flashLoan(uint256 amount) external {
         uint256 balanceBefore = address(this).balance;
 
