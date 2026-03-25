@@ -45,6 +45,7 @@ contract SelfAuthorizedVault is AuthorizedExecutor {
     }
 
     function sweepFunds(address receiver, IERC20 token) external onlyThis {
+        // address(this) to receiver
         SafeTransferLib.safeTransfer(address(token), receiver, token.balanceOf(address(this)));
     }
 

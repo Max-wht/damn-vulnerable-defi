@@ -44,6 +44,7 @@ contract UnstoppableChallenge is Test {
         // Deploy monitor contract and grant it vault's ownership
         monitorContract = new UnstoppableMonitor(address(vault));
         vault.transferOwnership(address(monitorContract));
+        //owner:: deployer -> monitor -> vault
 
         // Monitor checks it's possible to take a flash loan
         vm.expectEmit();
@@ -91,7 +92,7 @@ contract UnstoppableChallenge is Test {
      * CODE YOUR SOLUTION HERE
      */
     function test_unstoppable() public checkSolvedByPlayer {
-        
+        token.transfer(address(vault), 1);
     }
 
     /**

